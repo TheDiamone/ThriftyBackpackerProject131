@@ -38,6 +38,9 @@ public class PackageSearchService {
     @Value("${travel.api.max-packages:10}")
     private int maxPackages;
 
+    @Value("${travel.api.budget-cap:6000.00}")
+    private BigDecimal budgetCap;
+
     // ── IATA code → Booking.com numeric hotel dest_id ────────────────────────
     // These are city-level dest_ids from Booking.com used for hotel search.
     private static final Map<String, String> IATA_TO_HOTEL_DEST_ID = Map.ofEntries(
@@ -80,8 +83,12 @@ public class PackageSearchService {
                 ? req.getOrigin().toUpperCase().trim()
                 : DEFAULT_ORIGIN;
 
-        log.info("Package search: {} → {} | dates {} – {} | travelers={} | budget={}",
-                origin, dest, req.getStartDate(), req.getEndDate(), req.getTravelers(), req.getBudget());
+        BigDecimal effectiveBudget = (req.getBudget() != null)
+                ? req.getBudget().min(budgetCap)
+                : budgetCap;
+
+        log.info("Package search: {} → {} | dates {} – {} | travelers={} | budget={} (cap={})",
+                origin, dest, req.getStartDate(), req.getEndDate(), req.getTravelers(), effectiveBudget, budgetCap);
 
         int nights = calcNights(req.getStartDate(), req.getEndDate());
 
@@ -97,11 +104,11 @@ public class PackageSearchService {
                     req.getTravelers(),
                     "USD",
                     "BEST",
-                    "ONEWAY",
+                    "ROUNDTRIP",
                     "ECONOMY",
                     "en-gb",
                     0,
-                    null,
+                    req.getEndDate(),
                     null
             );
             flights = normalizeFlights(rawFlights, dest);
@@ -117,7 +124,7 @@ public class PackageSearchService {
             log.info("No usable flight data for {} → {}", origin, dest);
             return PackageSearchResponse.builder()
                     .destination(req.getDestination())
-                    .budget(req.getBudget())
+                    .budget(effectiveBudget)
                     .packages(Collections.emptyList())
                     .message("No flights found for this route and date. Try different dates or check airport codes.")
                     .build();
@@ -129,7 +136,7 @@ public class PackageSearchService {
             log.warn("No hotel dest_id mapping for '{}'. Add it to IATA_TO_HOTEL_DEST_ID.", dest);
             return PackageSearchResponse.builder()
                     .destination(req.getDestination())
-                    .budget(req.getBudget())
+                    .budget(effectiveBudget)
                     .packages(Collections.emptyList())
                     .message("Destination '" + dest + "' is not yet supported for hotel search. Contact support.")
                     .build();
@@ -163,7 +170,7 @@ public class PackageSearchService {
         if (hotels.isEmpty()) {
             return PackageSearchResponse.builder()
                     .destination(req.getDestination())
-                    .budget(req.getBudget())
+                    .budget(effectiveBudget)
                     .packages(Collections.emptyList())
                     .message("No hotels found for this destination and dates.")
                     .build();
@@ -176,7 +183,7 @@ public class PackageSearchService {
                 hotelDestId, req.getStartDate(), req.getEndDate(), dest);
 
         // 4. Build packages with binary search ─────────────────────────────────
-        List<TravelPackage> packages = buildPackages(flights, hotels, req.getBudget(), activities);
+        List<TravelPackage> packages = buildPackages(flights, hotels, effectiveBudget, activities);
 
         String message = packages.isEmpty()
                 ? "No packages found within budget."
@@ -184,7 +191,7 @@ public class PackageSearchService {
 
         return PackageSearchResponse.builder()
                 .destination(req.getDestination())
-                .budget(req.getBudget())
+                .budget(effectiveBudget)
                 .packages(packages)
                 .message(message)
                 .build();
@@ -519,9 +526,10 @@ public class PackageSearchService {
     }
 
     private PackageSearchResponse errorResponse(PackageSearchRequest req, String message) {
+        BigDecimal cap = (req.getBudget() != null) ? req.getBudget().min(budgetCap) : budgetCap;
         return PackageSearchResponse.builder()
                 .destination(req.getDestination())
-                .budget(req.getBudget())
+                .budget(cap)
                 .packages(Collections.emptyList())
                 .message(message)
                 .build();

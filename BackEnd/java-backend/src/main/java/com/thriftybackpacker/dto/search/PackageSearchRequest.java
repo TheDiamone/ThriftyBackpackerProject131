@@ -27,7 +27,6 @@ public class PackageSearchRequest {
     @NotNull @Min(value = 1, message = "travelers must be at least 1")
     private Integer travelers;
 
-    @NotNull
     @DecimalMin(value = "0.01", message = "budget must be positive")
     private BigDecimal budget;
 
