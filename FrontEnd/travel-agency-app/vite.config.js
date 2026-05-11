@@ -9,7 +9,7 @@ export default defineConfig({
     allowedHosts: ['agenta.local', 'agentb.local'],
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8080',
         changeOrigin: true,
       },
     },
