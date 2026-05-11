@@ -1,0 +1,87 @@
+/* Travel Agency App — Global Styles & Design Tokens */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --color-primary: #1a365d;
+  --color-primary-dark: #0f2444;
+  --color-primary-light: #2c5282;
+  --color-primary-bg: #ebf4ff;
+  --color-accent: #e07b39;
+  --color-accent-dark: #c4652a;
+  --color-bg: #f7f9fc;
+  --color-bg-subtle: #f0f2f5;
+  --color-text: #1a202c;
+  --color-text-muted: #718096;
+  --color-border: #e2e8f0;
+  --color-border-dark: #a0aec0;
+  --hero-gradient: linear-gradient(160deg, #eef2ff 0%, #f0f9ff 60%, #fdf4ff 100%);
+
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-tenant-theme='agenta'] {
+  --color-primary: #1a365d;
+  --color-primary-dark: #0f2444;
+  --color-primary-light: #2c5282;
+  --color-primary-bg: #eaf2ff;
+  --color-accent: #d67a34;
+  --color-accent-dark: #b96122;
+  --color-bg: #f5f8fd;
+  --color-bg-subtle: #ebf0f7;
+  --color-text: #1a202c;
+  --color-text-muted: #66758a;
+  --color-border: #dbe4ef;
+  --color-border-dark: #8fa2b7;
+  --hero-gradient: linear-gradient(160deg, #e7f0ff 0%, #ecf8ff 58%, #f9f1ff 100%);
+}
+
+:root[data-tenant-theme='agentb'] {
+  --color-primary: #0f766e;
+  --color-primary-dark: #115e59;
+  --color-primary-light: #0f9a91;
+  --color-primary-bg: #e6fffa;
+  --color-accent: #b45309;
+  --color-accent-dark: #92400e;
+  --color-bg: #f2faf6;
+  --color-bg-subtle: #e6f4ee;
+  --color-text: #15332f;
+  --color-text-muted: #4b6a65;
+  --color-border: #cfe4da;
+  --color-border-dark: #80a79a;
+  --hero-gradient: linear-gradient(155deg, #dbf7ea 0%, #ddf6f5 54%, #fff2dd 100%);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+#app {
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 { margin: 0; line-height: 1.25; }
+p { margin: 0; }
+a { text-decoration: none; color: inherit; }
+button, input { font-family: inherit; font-size: inherit; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-dark); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-primary-light); }
