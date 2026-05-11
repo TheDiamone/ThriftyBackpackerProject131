@@ -6,6 +6,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +22,12 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /** Browser closed the connection before the response finished writing — not a code bug. */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleBrokenPipe(AsyncRequestNotUsableException ex) {
+        log.warn("Client disconnected mid-response (broken pipe) — ignored");
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(ResourceNotFoundException ex) {
@@ -44,6 +52,29 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("detail", ex.getMessage()));
+    }
+
+    /**
+     * Forwards RapidAPI 4xx errors (429 rate limit, 401 auth, 403 subscription)
+     * back to the frontend with the correct HTTP status — no stack trace logged.
+     */
+    @ExceptionHandler(HttpClientErrorException.class)
+    public ResponseEntity<Map<String, Object>> handleRapidApiClientError(HttpClientErrorException ex) {
+        if (ex.getStatusCode().value() == 429) {
+            log.warn("RapidAPI rate limit hit — returning 429 to frontend");
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("detail", "RapidAPI rate limit reached. Wait a moment and try again."));
+        }
+        log.error("RapidAPI client error {}: {}", ex.getStatusCode(), ex.getResponseBodyAsString());
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(Map.of("detail", "RapidAPI error: " + ex.getResponseBodyAsString()));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalState(IllegalStateException ex) {
+        log.error("Service error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(Map.of("detail", ex.getMessage()));
     }
 

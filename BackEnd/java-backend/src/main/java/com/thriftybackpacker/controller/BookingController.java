@@ -47,8 +47,8 @@ public class BookingController {
             description = "Returns bookings filtered by userId and agentId. Called by the Vue frontend bookingService.js.")
     @GetMapping("/bookings/by-agent-user")
     public List<BookingDetailResponse> getBookingsByAgentUser(
-            @RequestParam Integer userId,
-            @RequestParam(required = false) Integer agentId) {
+            @RequestParam("user_id") Integer userId,
+            @RequestParam(value = "agent_id", required = false) Integer agentId) {
         return bookingService.getBookingsByAgentUser(userId, agentId);
     }
 

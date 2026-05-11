@@ -35,6 +35,10 @@ public class Booking {
     @Column(name = "End_Date", nullable = false)
     private LocalDate endDate;
 
+    /** Booking lifecycle status. Starts as PENDING; can be advanced to CONFIRMED or CANCELLED. */
+    @Column(name = "Status", nullable = false)
+    private String status = "PENDING";
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "User_Id", insertable = false, updatable = false)
     private User user;

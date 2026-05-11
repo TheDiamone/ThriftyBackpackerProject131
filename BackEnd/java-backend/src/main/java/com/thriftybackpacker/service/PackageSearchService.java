@@ -86,15 +86,17 @@ public class PackageSearchService {
         int nights = calcNights(req.getStartDate(), req.getEndDate());
 
         // 1. Fetch flights ─────────────────────────────────────────────────────
+        // from_code / to_code format: "JFK.AIRPORT" — matches booking-com.p.rapidapi.com
+        // page_number is 0-indexed for this API.
         List<FlightOption> flights = Collections.emptyList();
         try {
             Map<String, Object> rawFlights = rapidApi.searchFlights(
-                    origin + ".AIRPORT",    // from_code format: "JFK.AIRPORT"
-                    dest + ".AIRPORT",      // to_code format: "LHR.AIRPORT"
+                    origin + ".AIRPORT",
+                    dest + ".AIRPORT",
                     req.getStartDate(),
                     req.getTravelers(),
-                    "USD",                  // currency — matches frontend expectation
-                    "CHEAPEST",
+                    "USD",
+                    "BEST",
                     "ONEWAY",
                     "ECONOMY",
                     "en-gb",
@@ -167,8 +169,14 @@ public class PackageSearchService {
                     .build();
         }
 
-        // 3. Build packages with binary search ─────────────────────────────────
-        List<TravelPackage> packages = buildPackages(flights, hotels, req.getBudget(), dest);
+        // 3. Fetch real activities from RapidAPI attractions endpoint ──────────
+        // Uses the same dest_id already obtained for the hotel search.
+        // Automatically falls back to static activity data if the API fails.
+        List<String> activities = activityService.fetchRealActivityNames(
+                hotelDestId, req.getStartDate(), req.getEndDate(), dest);
+
+        // 4. Build packages with binary search ─────────────────────────────────
+        List<TravelPackage> packages = buildPackages(flights, hotels, req.getBudget(), activities);
 
         String message = packages.isEmpty()
                 ? "No packages found within budget."
@@ -196,9 +204,25 @@ public class PackageSearchService {
     List<FlightOption> normalizeFlights(Map<String, Object> raw, String dest) {
         if (raw == null) return Collections.emptyList();
 
-        List<Object> offers = extractList(raw, "flightOffers", "results", "result", "flights", "data");
+        // booking-com15 wraps results: { "data": { "flightOffers": [...] } }
+        // Detect nested vs flat structure and log the top-level keys for debugging.
+        log.debug("Flight response top-level keys: {}", raw.keySet());
+
+        List<Object> offers = Collections.emptyList();
+        Object dataVal = raw.get("data");
+        if (dataVal instanceof Map) {
+            Map<String, Object> dataMap = (Map<String, Object>) dataVal;
+            log.debug("Flight response data keys: {}", dataMap.keySet());
+            offers = extractList(dataMap, "flightOffers", "flights", "results", "result");
+        }
         if (offers.isEmpty()) {
-            log.warn("No flight offers found in RapidAPI response for {}", dest);
+            offers = extractList(raw, "flightOffers", "flights", "results", "result");
+        }
+
+        if (offers.isEmpty()) {
+            // Log status + message so we can see the actual API error
+            log.warn("No flight offers found for {}. status={} message={} keys={}",
+                    dest, raw.get("status"), raw.get("message"), raw.keySet());
             return Collections.emptyList();
         }
 
@@ -242,10 +266,28 @@ public class PackageSearchService {
     List<HotelOption> normalizeHotels(Map<String, Object> raw, String dest, int nights) {
         if (raw == null) return Collections.emptyList();
 
-        List<Object> items = extractList(raw, "result", "results", "hotels", "data");
+        // booking-com15 wraps results: { "data": { "hotels": [...] } }
+        log.debug("Hotel response top-level keys: {}", raw.keySet());
+
+        List<Object> items = Collections.emptyList();
+        Object dataVal = raw.get("data");
+        if (dataVal instanceof Map) {
+            Map<String, Object> dataMap = (Map<String, Object>) dataVal;
+            log.debug("Hotel response data keys: {}", dataMap.keySet());
+            items = extractList(dataMap, "hotels", "result", "results", "hotelList");
+        }
         if (items.isEmpty()) {
-            log.warn("No hotel results found in RapidAPI response for {}", dest);
+            items = extractList(raw, "result", "results", "hotels", "data");
+        }
+
+        if (items.isEmpty()) {
+            log.warn("No hotel results found in RapidAPI response for {}. Top-level keys: {}", dest, raw.keySet());
             return Collections.emptyList();
+        }
+
+        // Log first hotel's keys so we can see the booking-com15 structure
+        if (!items.isEmpty() && items.get(0) instanceof Map) {
+            log.debug("First hotel object keys: {}", ((Map<?, ?>) items.get(0)).keySet());
         }
 
         List<HotelOption> normalized = new ArrayList<>();
@@ -296,53 +338,49 @@ public class PackageSearchService {
      * so idx = upperBound(...) - 1 is the last price <= target.
      */
     List<TravelPackage> buildPackages(List<FlightOption> flights, List<HotelOption> hotels,
-                                      BigDecimal budget, String dest) {
-        // Sort ascending by price
+                                      BigDecimal budget, List<String> activities) {
         flights.sort(Comparator.comparing(FlightOption::getPrice));
         hotels.sort(Comparator.comparing(HotelOption::getPrice));
 
         List<BigDecimal> hotelPrices = hotels.stream()
                 .map(HotelOption::getPrice)
                 .collect(Collectors.toList());
-
-        List<String> activities = activityService.getActivityNames(dest);
         List<TravelPackage> result = new ArrayList<>();
+        // Track seen (flightCost, hotelCost) pairs so duplicate price combinations
+        // (caused by multiple flights at the same price) appear only once.
+        java.util.Set<String> seen = new java.util.HashSet<>();
         int counter = 1;
 
         for (FlightOption flight : flights) {
-            if (flight.getPrice().compareTo(budget) >= 0) {
-                // Flights are sorted — all remaining flights also exceed budget alone
-                break;
-            }
+            if (flight.getPrice().compareTo(budget) >= 0) break;
 
             BigDecimal remaining = budget.subtract(flight.getPrice());
-
-            // upperBound gives the insertion index of remaining+ε, so [idx] is the last hotel <= remaining
             int idx = upperBound(hotelPrices, remaining) - 1;
-            if (idx < 0) {
-                // No hotel fits under the remaining budget for this flight
-                continue;
+            if (idx < 0) continue;
+
+            // Pair this flight with every distinct hotel from cheapest up to best-affordable,
+            // stepping through hotel options to give variety across packages.
+            for (int hi = 0; hi <= idx && result.size() < maxPackages; hi++) {
+                HotelOption hotel = hotels.get(hi);
+                BigDecimal totalCost = flight.getPrice().add(hotel.getPrice());
+                if (totalCost.compareTo(budget) > 0) continue;
+
+                String key = flight.getPrice().toPlainString() + "|" + hotel.getPrice().toPlainString();
+                if (!seen.add(key)) continue;   // skip exact duplicate price combination
+
+                result.add(TravelPackage.builder()
+                        .packageId(String.format("pkg-%03d", counter++))
+                        .flightCost(flight.getPrice())
+                        .hotelCost(hotel.getPrice())
+                        .totalCost(totalCost)
+                        .provider("RapidAPI")
+                        .activities(activities)
+                        .build());
             }
-
-            HotelOption bestHotel = hotels.get(idx);
-            BigDecimal totalCost = flight.getPrice().add(bestHotel.getPrice());
-
-            // Defensive double-check (upperBound guarantees this, but be explicit)
-            if (totalCost.compareTo(budget) > 0) continue;
-
-            result.add(TravelPackage.builder()
-                    .packageId(String.format("pkg-%03d", counter++))
-                    .flightCost(flight.getPrice())
-                    .hotelCost(bestHotel.getPrice())
-                    .totalCost(totalCost)
-                    .provider("RapidAPI")
-                    .activities(activities)
-                    .build());
 
             if (result.size() >= maxPackages) break;
         }
 
-        // Sort final list by totalCost ascending
         result.sort(Comparator.comparing(TravelPackage::getTotalCost));
         return result;
     }

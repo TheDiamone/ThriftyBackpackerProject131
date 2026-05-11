@@ -18,6 +18,7 @@
 /home/nathanlor/Documents/2School Documents/CMPE 131/Project Phase 2/ThriftyBackpackerProject131/BackEnd/java-backend/src/main/java/com/thriftybackpacker/dto/booking/BookingResponse.java
 /home/nathanlor/Documents/2School Documents/CMPE 131/Project Phase 2/ThriftyBackpackerProject131/BackEnd/java-backend/src/main/java/com/thriftybackpacker/config/RapidApiProperties.java
 /home/nathanlor/Documents/2School Documents/CMPE 131/Project Phase 2/ThriftyBackpackerProject131/BackEnd/java-backend/src/main/java/com/thriftybackpacker/dto/search/FlightOption.java
+/home/nathanlor/Documents/2School Documents/CMPE 131/Project Phase 2/ThriftyBackpackerProject131/BackEnd/java-backend/src/main/java/com/thriftybackpacker/service/LocationMapper.java
 /home/nathanlor/Documents/2School Documents/CMPE 131/Project Phase 2/ThriftyBackpackerProject131/BackEnd/java-backend/src/main/java/com/thriftybackpacker/model/Booking.java
 /home/nathanlor/Documents/2School Documents/CMPE 131/Project Phase 2/ThriftyBackpackerProject131/BackEnd/java-backend/src/main/java/com/thriftybackpacker/dto/booking/HotelReservationUpdate.java
 /home/nathanlor/Documents/2School Documents/CMPE 131/Project Phase 2/ThriftyBackpackerProject131/BackEnd/java-backend/src/main/java/com/thriftybackpacker/ThriftyBackpackerApplication.java

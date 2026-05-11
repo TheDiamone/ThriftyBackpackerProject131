@@ -26,4 +26,7 @@ public class BookingResponse {
 
     @JsonProperty("End_Date")
     private LocalDate endDate;
+
+    @JsonProperty("Status")
+    private String status;
 }

@@ -8,6 +8,7 @@ com/thriftybackpacker/model/FlightReservation.class
 com/thriftybackpacker/dto/booking/BookingUpdate.class
 com/thriftybackpacker/dto/booking/BookingDetailResponse.class
 com/thriftybackpacker/dto/booking/BookingResponse.class
+com/thriftybackpacker/service/RapidApiClient$1.class
 com/thriftybackpacker/dto/booking/FlightReservationCreate.class
 com/thriftybackpacker/controller/HotelController.class
 com/thriftybackpacker/dto/booking/HotelReservationCreate.class
@@ -28,6 +29,7 @@ com/thriftybackpacker/dto/search/TravelPackage$TravelPackageBuilder.class
 com/thriftybackpacker/dto/search/HotelOption.class
 com/thriftybackpacker/exception/ResourceNotFoundException.class
 com/thriftybackpacker/service/BookingService.class
+com/thriftybackpacker/service/LocationMapper.class
 com/thriftybackpacker/dto/search/TravelPackage.class
 com/thriftybackpacker/dto/search/FlightOption.class
 com/thriftybackpacker/controller/BookingController.class
