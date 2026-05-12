@@ -14,11 +14,9 @@ import java.time.LocalDate;
 @Data
 public class FlightReservationCreate {
 
-    @NotBlank
     @JsonProperty("Airline_Code")
     private String airlineCode;
 
-    @NotBlank
     @JsonProperty("Flight_Number")
     private String flightNumber;
 

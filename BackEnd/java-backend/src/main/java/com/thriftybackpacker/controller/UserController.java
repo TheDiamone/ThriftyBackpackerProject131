@@ -57,21 +57,33 @@ public class UserController {
 
     /**
      * Register — creates a new user.
-     * Returns: { userId, message }
+     * Returns { userId, message } on success.
+     * Returns 400 for missing/invalid email or missing firstName.
+     * Returns 409 if the email is already registered.
+     * No password is stored or required.
      */
-    @Operation(summary = "Register a new user", description = "Creates a user record. No password is stored.")
+    @Operation(
+            summary = "Register a new user",
+            description = "Creates a user record with no password. Returns 409 if the email is already registered."
+    )
     @PostMapping("/register")
     public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, String> body) {
-        String firstName = body.getOrDefault("First_Name", body.getOrDefault("firstName", "User"));
-        String lastName = body.getOrDefault("Last_Name", body.getOrDefault("lastName", ""));
-        String email = body.getOrDefault("Email", body.getOrDefault("email", ""));
-        String phone = body.getOrDefault("Phone_Number", body.getOrDefault("phoneNumber", ""));
+        String firstName = body.getOrDefault("First_Name", body.getOrDefault("firstName", "")).trim();
+        String lastName  = body.getOrDefault("Last_Name",  body.getOrDefault("lastName",  "")).trim();
+        String email     = body.getOrDefault("Email",       body.getOrDefault("email",     "")).trim().toLowerCase();
+        String phone     = body.getOrDefault("Phone_Number", body.getOrDefault("phoneNumber", "")).trim();
 
+        if (firstName.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("detail", "firstName is required."));
+        }
         if (email.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("detail", "Email is required."));
+            return ResponseEntity.badRequest().body(Map.of("detail", "email is required."));
+        }
+        if (!email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
+            return ResponseEntity.badRequest().body(Map.of("detail", "email is not a valid address."));
         }
 
-        User user = userService.createUser(firstName, lastName, email, phone);
+        User user = userService.registerUser(firstName, lastName, email, phone);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                 "userId", user.getUserId(),
                 "User_ID", user.getUserId(),
