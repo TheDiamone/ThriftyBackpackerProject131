@@ -8,18 +8,23 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Passes real RapidAPI flight search results to the caller, capped at max-flights.
  * Mirrors Python rapidapi.py: GET /api/v1/flights/search
  *
- * The cap (travel.api.max-flights) reduces the payload size sent to the frontend
- * and keeps the response fast. The frontend sorts by price anyway so returning
- * 20 well-sorted results is equivalent to returning 100.
+ * Currency: the frontend sends currency=AED but this controller always requests USD from
+ * RapidAPI so that the budget filter compares like-for-like. The frontend does not display
+ * a currency label, so the change from AED → USD is reflected in lower numeric values.
+ *
+ * Budget filter: maxFlightUsd = budget-cap × budget-flight-ratio (default $2,400 for a
+ * $6,000 cap at 40%). Offers with no parseable price are excluded. If all offers have
+ * unparseable prices the filter is bypassed and all offers are returned unfiltered.
  */
 @Slf4j
 @Tag(name = "Flight Search", description = "Real-time flight search via RapidAPI (booking-com.p.rapidapi.com)")
@@ -33,13 +38,18 @@ public class FlightController {
     @Value("${travel.api.max-flights:20}")
     private int maxFlights;
 
-    @Value("${travel.api.max-flight-price:0}")
-    private double maxFlightPrice;
+    @Value("${travel.api.budget-cap:6000.00}")
+    private BigDecimal budgetCap;
+
+    @Value("${travel.api.budget-flight-ratio:0.40}")
+    private double flightRatio;
 
     @Operation(
             summary = "Search flights",
             description = "Calls booking-com.p.rapidapi.com/v1/flights/search and returns up to " +
-                    "max-flights results (default 20). from_code format: 'LHR.AIRPORT'. Requires RAPIDAPI_KEY."
+                    "max-flights results within the USD budget split. " +
+                    "Prices are always requested in USD regardless of the frontend currency parameter. " +
+                    "from_code format: 'LHR.AIRPORT'. Requires RAPIDAPI_KEY."
     )
     @GetMapping("/flights/search")
     public Map<String, Object> searchFlights(
@@ -56,42 +66,87 @@ public class FlightController {
             @RequestParam(required = false)          String return_date,
             @RequestParam(required = false)          String children_ages) {
 
+        double maxFlightUsd = budgetCap.doubleValue() * flightRatio;
+
+        log.info("Flight search — from={} to={} date={} | frontend_currency={} effective_currency=USD | budget_cap={} max_flight_price={}",
+                from_code, to_code, depart_date, currency, budgetCap, String.format("%.2f", maxFlightUsd));
+
+        // Always request USD from RapidAPI regardless of the frontend currency param.
+        // This ensures budget comparison is valid (budget-cap is in USD).
         Map<String, Object> raw = rapidApiClient.searchFlights(
                 from_code, to_code, depart_date, adults,
-                currency, order_by, flight_type, cabin_class,
+                "USD", order_by, flight_type, cabin_class,
                 locale, page_number, return_date, children_ages);
 
-        return capFlightOffers(raw);
+        return capFlightOffers(raw, maxFlightUsd);
     }
 
     /**
-     * Filters flight offers by price cap (travel.api.max-flight-price) then
-     * truncates to maxFlights. Looks for the same keys the frontend checks:
-     * flightOffers → results → result → flights → data
+     * Filters flight offers to those priced at or below maxFlightPrice (USD), then
+     * truncates to maxFlights. Price extraction mirrors frontend flightService.js.
+     *
+     * Unknown-price handling:
+     *   - An offer whose price cannot be extracted (returns 0) is logged and excluded.
+     *   - If ALL offers have unparseable prices, the price filter is bypassed and all offers
+     *     are returned up to maxFlights (can't filter, better than an empty list).
      */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> capFlightOffers(Map<String, Object> raw) {
-        if (raw == null) return raw;
+    private Map<String, Object> capFlightOffers(Map<String, Object> raw, double maxFlightPrice) {
+        if (raw == null) return null;
+
         for (String key : new String[]{"flightOffers", "results", "result", "flights", "data"}) {
             Object val = raw.get(key);
             if (!(val instanceof List<?> list)) continue;
 
-            List<Object> offers = (List<Object>) list;
+            List<Object> allOffers = (List<Object>) list;
+            int totalBefore = allOffers.size();
+            int unknownCount = 0;
+            List<Object> budgetOffers = new ArrayList<>();
 
-            if (maxFlightPrice > 0) {
-                offers = offers.stream()
-                        .filter(o -> o instanceof Map<?, ?> m && extractFlightPrice((Map<String, Object>) m) <= maxFlightPrice)
-                        .collect(Collectors.toList());
-                log.debug("Price filter (<={}): {} → {} offers", maxFlightPrice, list.size(), offers.size());
+            for (Object offer : allOffers) {
+                if (!(offer instanceof Map<?, ?> m)) continue;
+                double price = extractFlightPrice((Map<String, Object>) m);
+                if (price == 0) {
+                    unknownCount++;
+                    log.warn("Flight budget filter: offer has no parseable price — excluding from results");
+                } else if (price <= maxFlightPrice) {
+                    budgetOffers.add(offer);
+                }
             }
 
-            if (offers.size() > maxFlights) {
-                offers = offers.subList(0, maxFlights);
+            // Safety bypass: if every single offer had an unparseable price, we cannot
+            // apply the budget filter at all. Return all offers up to maxFlights.
+            if (budgetOffers.isEmpty() && unknownCount == totalBefore && totalBefore > 0) {
+                log.warn("Flight budget filter: ALL {} offers have unparseable prices — bypassing price filter", totalBefore);
+                List<Object> countCapped = totalBefore > maxFlights
+                        ? allOffers.subList(0, maxFlights)
+                        : allOffers;
+                if (countCapped.size() != totalBefore) {
+                    Map<String, Object> c = new LinkedHashMap<>(raw);
+                    c.put(key, countCapped);
+                    return c;
+                }
+                return raw;
             }
 
-            if (offers.size() != list.size()) {
+            int overBudget = (totalBefore - unknownCount) - budgetOffers.size();
+            log.info("Flight budget filter — max={}USD | total={} known={} under_budget={} over_budget={} unknown={}",
+                    String.format("%.2f", maxFlightPrice),
+                    totalBefore, totalBefore - unknownCount,
+                    budgetOffers.size(), overBudget, unknownCount);
+
+            if (budgetOffers.isEmpty()) {
+                log.info("Flight budget filter: no flights found at or below {}USD — returning empty list", String.format("%.2f", maxFlightPrice));
+            }
+
+            // Apply count cap after price filter
+            List<Object> limited = budgetOffers.size() > maxFlights
+                    ? budgetOffers.subList(0, maxFlights)
+                    : budgetOffers;
+
+            if (limited.size() != totalBefore) {
                 Map<String, Object> capped = new LinkedHashMap<>(raw);
-                capped.put(key, offers);
+                capped.put(key, limited);
                 return capped;
             }
             return raw;
@@ -100,11 +155,12 @@ public class FlightController {
     }
 
     /**
+     * Extracts a USD price from a raw RapidAPI flight offer.
      * Mirrors the price extraction chain in the frontend's flightService.js:
      *   priceBreakdown.total.units
      *   ?? unifiedPriceBreakdown.price.units
-     *   ?? unifiedPriceBreakdown.price
-     * Returns 0 when no price can be found (offer is kept, not filtered out).
+     *   ?? unifiedPriceBreakdown.price (if numeric, not a nested map)
+     * Returns 0 when no price can be found — callers must treat 0 as unknown, not free.
      */
     @SuppressWarnings("unchecked")
     private double extractFlightPrice(Map<String, Object> offer) {
@@ -127,7 +183,7 @@ public class FlightController {
                 if (price instanceof Number n) return n.doubleValue();
             }
         } catch (Exception e) {
-            log.warn("Could not extract flight price: {}", e.getMessage());
+            log.warn("Flight price extraction error: {}", e.getMessage());
         }
         return 0;
     }
