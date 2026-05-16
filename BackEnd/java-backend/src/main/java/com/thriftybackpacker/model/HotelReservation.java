@@ -25,6 +25,9 @@ public class HotelReservation {
 
     @Column(name = "Hotel_Code", nullable = false)
     private Integer hotelCode;
+    
+    @Column(name = "Hotel_Name")
+    private String hotelName;
 
     @Column(name = "Check_In_Date", nullable = false)
     private LocalDate checkInDate;

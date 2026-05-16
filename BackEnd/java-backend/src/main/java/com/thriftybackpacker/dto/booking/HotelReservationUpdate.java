@@ -15,6 +15,9 @@ public class HotelReservationUpdate {
     @JsonProperty("Hotel_Code")
     private Integer hotelCode;
 
+    @JsonProperty("Hotel_Name")
+    private String hotelName;
+
     @JsonProperty("Check_In_Date")
     private LocalDate checkInDate;
 

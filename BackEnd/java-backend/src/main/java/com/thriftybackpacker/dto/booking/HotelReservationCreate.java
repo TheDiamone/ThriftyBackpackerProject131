@@ -17,6 +17,9 @@ public class HotelReservationCreate {
     @JsonProperty("Hotel_Code")
     private Integer hotelCode;
 
+    @JsonProperty("Hotel_Name")
+    private String hotelName;
+
     @NotNull
     @JsonProperty("Check_In_Date")
     private LocalDate checkInDate;

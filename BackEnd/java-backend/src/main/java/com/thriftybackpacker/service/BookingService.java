@@ -96,6 +96,7 @@ public class BookingService {
             HotelReservation hr = new HotelReservation();
             hr.setBookingId(booking.getBookingId());
             hr.setHotelCode(h.getHotelCode());
+            hr.setHotelName(h.getHotelName());
             hr.setCheckInDate(h.getCheckInDate());
             hr.setCheckInTime(h.getCheckInTime());
             hr.setCheckOutDate(h.getCheckOutDate());
@@ -259,6 +260,7 @@ public class BookingService {
         HotelReservationResponse r = new HotelReservationResponse();
         r.setReservationNo(hr.getReservationNo());
         r.setHotelCode(hr.getHotelCode());
+        r.setHotelName(hr.getHotelName());
         r.setCheckInDate(hr.getCheckInDate());
         r.setCheckInTime(hr.getCheckInTime());
         r.setCheckOutDate(hr.getCheckOutDate());
