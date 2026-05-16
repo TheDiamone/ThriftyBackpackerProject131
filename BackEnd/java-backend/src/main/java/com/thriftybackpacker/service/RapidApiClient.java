@@ -1,6 +1,7 @@
 package com.thriftybackpacker.service;
 
 import com.thriftybackpacker.config.RapidApiProperties;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,6 +42,11 @@ public class RapidApiClient {
 
     @Value("${rapidapi.rate-limit-ttl-ms:120000}")
     private long rateLimitTtlMs;
+
+    @PostConstruct
+    public void init() {
+        validateKey();
+    }
 
     // Cache: URL → {responseBody or RATE_LIMITED_SENTINEL, expiryEpochMs}
     private static final Object RATE_LIMITED_SENTINEL = new Object();
@@ -113,6 +119,19 @@ public class RapidApiClient {
         if (categoriesFilterIds != null) params.add("categories_filter_ids", categoriesFilterIds);
 
         return get("v1/hotels/search", params);
+    }
+
+    // ── Location search ───────────────────────────────────────────────────────
+
+    /**
+     * GET v1/hotels/locations — returns Booking.com dest_id for a city name.
+     * Used to resolve city names to dest_ids that work across hotel and attraction searches.
+     */
+    public Map<String, Object> searchLocations(String name, String locale) {
+        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+        params.add("name", name);
+        params.add("locale", locale != null ? locale : "en-gb");
+        return get("v1/hotels/locations", params);
     }
 
     // ── Attractions ───────────────────────────────────────────────────────────

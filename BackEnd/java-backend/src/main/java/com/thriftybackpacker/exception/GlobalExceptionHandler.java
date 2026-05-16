@@ -1,6 +1,7 @@
 package com.thriftybackpacker.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -22,6 +23,9 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @Value("${rapidapi.rate-limit-ttl-ms:30000}")
+    private long rateLimitTtlMs;
 
     /** Browser closed the connection before the response finished writing — not a code bug. */
     @ExceptionHandler(AsyncRequestNotUsableException.class)
@@ -64,13 +68,19 @@ public class GlobalExceptionHandler {
     /**
      * Forwards RapidAPI 4xx errors (429 rate limit, 401 auth, 403 subscription)
      * back to the frontend with the correct HTTP status — no stack trace logged.
+     * 429 responses include retryAfterSeconds (matches rapidapi.rate-limit-ttl-ms)
+     * and the standard Retry-After header so clients know exactly how long to wait.
      */
     @ExceptionHandler(HttpClientErrorException.class)
     public ResponseEntity<Map<String, Object>> handleRapidApiClientError(HttpClientErrorException ex) {
         if (ex.getStatusCode().value() == 429) {
-            log.warn("RapidAPI rate limit hit — returning 429 to frontend");
+            long retryAfterSeconds = rateLimitTtlMs / 1000;
+            log.warn("RapidAPI rate limit hit — retry in {} seconds", retryAfterSeconds);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(Map.of("detail", "RapidAPI rate limit reached. Wait a moment and try again."));
+                    .header("Retry-After", String.valueOf(retryAfterSeconds))
+                    .body(Map.of(
+                            "detail", "RapidAPI rate limit reached. Retry in " + retryAfterSeconds + " seconds.",
+                            "retryAfterSeconds", retryAfterSeconds));
         }
         log.error("RapidAPI client error {}: {}", ex.getStatusCode(), ex.getResponseBodyAsString());
         return ResponseEntity.status(ex.getStatusCode())

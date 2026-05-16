@@ -46,29 +46,34 @@ public class LocationMapper {
             Map.entry("rome",          "-126963")
     );
 
+    // Attraction dest_ids use the same hotel city IDs (negative integers).
+    // Confirmed: London -2601889 returned 20 real London attractions.
+    // The 20XXXXXX IDs were unreliable (London's returned empty; NYC's returned NYC results
+    // which happened to be correct but the format is inconsistent across cities).
+    // Using hotel city IDs ensures every city maps to a validated Booking.com location.
     private static final Map<String, String> ATTRACTIONS_DEST_IDS = Map.ofEntries(
-            Map.entry("london",        "20088325"),
-            Map.entry("new york",      "20065512"),
-            Map.entry("paris",         "20015493"),
-            Map.entry("tokyo",         "20024994"),
-            Map.entry("los angeles",   "20044399"),
-            Map.entry("san francisco", "20044537"),
-            Map.entry("honolulu",      "20041249"),
-            Map.entry("chicago",       "20044382"),
-            Map.entry("miami",         "20044398"),
-            Map.entry("seattle",       "20044401"),
-            Map.entry("boston",        "20044379"),
-            Map.entry("dubai",         "20014390"),
-            Map.entry("singapore",     "20019531"),
-            Map.entry("sydney",        "20008785"),
-            Map.entry("seoul",         "20022439"),
-            Map.entry("bangkok",       "20015406"),
-            Map.entry("frankfurt",     "20014924"),
-            Map.entry("amsterdam",     "20014458"),
-            Map.entry("toronto",       "20065225"),
-            Map.entry("vancouver",     "20065224"),
-            Map.entry("madrid",        "20023938"),
-            Map.entry("rome",          "20024413")
+            Map.entry("london",        "-2601889"),
+            Map.entry("new york",      "-553173"),
+            Map.entry("paris",         "-1456928"),
+            Map.entry("tokyo",         "-246227"),
+            Map.entry("los angeles",   "-1506450"),
+            Map.entry("san francisco", "-1307956"),
+            Map.entry("honolulu",      "-1338795"),
+            Map.entry("chicago",       "-634685"),
+            Map.entry("miami",         "-1215325"),
+            Map.entry("seattle",       "-1815797"),
+            Map.entry("boston",        "-1506547"),
+            Map.entry("dubai",         "-782831"),
+            Map.entry("singapore",     "-73635"),
+            Map.entry("sydney",        "-1603135"),
+            Map.entry("seoul",         "-716583"),
+            Map.entry("bangkok",       "-3077749"),
+            Map.entry("frankfurt",     "-1746443"),
+            Map.entry("amsterdam",     "-2140479"),
+            Map.entry("toronto",       "-574490"),
+            Map.entry("vancouver",     "-575267"),
+            Map.entry("madrid",        "-390625"),
+            Map.entry("rome",          "-126963")
     );
 
     /** Resolve Booking.com hotel dest_id from a city name. */
@@ -87,5 +92,33 @@ public class LocationMapper {
         Optional<String> result = Optional.ofNullable(ATTRACTIONS_DEST_IDS.get(key));
         if (result.isEmpty()) log.warn("No attractions dest_id mapping for city name '{}'", cityName);
         return result;
+    }
+
+    /**
+     * Returns the best available dest_id for an attractions search.
+     * Tries the dedicated attractions ID first; if absent, falls back to the hotel
+     * city ID (same city — the Booking.com v1/attractions/search endpoint accepts
+     * the hotel city ID format when no attractions-specific ID is known).
+     * Returns a record so callers can log which ID source was used.
+     */
+    public record DestIdResult(String destId, String source) {}
+
+    public Optional<DestIdResult> resolveAttractionDestId(String cityName) {
+        if (cityName == null || cityName.isBlank()) return Optional.empty();
+        String key = cityName.trim().toLowerCase();
+
+        String attractionsId = ATTRACTIONS_DEST_IDS.get(key);
+        if (attractionsId != null) {
+            return Optional.of(new DestIdResult(attractionsId, "attractions-map"));
+        }
+
+        String hotelId = HOTEL_DEST_IDS.get(key);
+        if (hotelId != null) {
+            log.info("No attractions dest_id for '{}' — falling back to hotel city ID {}", cityName, hotelId);
+            return Optional.of(new DestIdResult(hotelId, "hotel-map-fallback"));
+        }
+
+        log.warn("No dest_id found for city '{}' in either map", cityName);
+        return Optional.empty();
     }
 }

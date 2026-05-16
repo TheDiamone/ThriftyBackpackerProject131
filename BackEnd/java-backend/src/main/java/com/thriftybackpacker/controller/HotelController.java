@@ -1,20 +1,25 @@
 package com.thriftybackpacker.controller;
 
-import com.thriftybackpacker.service.LocationMapper;
-import com.thriftybackpacker.service.RapidApiClient;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.thriftybackpacker.service.LocationMapper;
+import com.thriftybackpacker.service.RapidApiClient;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Hotel search — passes real RapidAPI results to the client after applying a USD budget filter.
@@ -24,8 +29,8 @@ import java.util.Map;
  * from RapidAPI so that the budget filter compares like-for-like. The frontend does not display
  * a currency label, so the change from AED → USD is reflected in lower numeric values.
  *
- * Budget filter: maxHotelUsd = budget-cap × budget-hotel-ratio (default $3,600 for a
- * $6,000 cap at 60%). Price is extracted as total-stay cost. Hotels with no parseable price
+ * Budget filter: maxHotelUsd = budget-cap × budget-hotel-ratio (default $600 for a
+ * $1,500 cap at 40%). Price is extracted as total-stay cost. Hotels with no parseable price
  * are excluded. If all hotels have unparseable prices the filter is bypassed.
  *
  * dest_id resolution: the Vue frontend sends dest_name + country_name (not dest_id).
@@ -41,10 +46,10 @@ public class HotelController {
     private final RapidApiClient rapidApiClient;
     private final LocationMapper locationMapper;
 
-    @Value("${travel.api.budget-cap:6000.00}")
+    @Value("${travel.api.budget-cap:1500.00}")
     private BigDecimal budgetCap;
 
-    @Value("${travel.api.budget-hotel-ratio:0.60}")
+    @Value("${travel.api.budget-hotel-ratio:0.40}")
     private double hotelRatio;
 
     @Operation(

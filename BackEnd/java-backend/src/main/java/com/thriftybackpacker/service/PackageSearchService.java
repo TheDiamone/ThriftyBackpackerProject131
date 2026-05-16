@@ -38,7 +38,7 @@ public class PackageSearchService {
     @Value("${travel.api.max-packages:10}")
     private int maxPackages;
 
-    @Value("${travel.api.budget-cap:6000.00}")
+    @Value("${travel.api.budget-cap:1500.00}")
     private BigDecimal budgetCap;
 
     // ── IATA code → Booking.com numeric hotel dest_id ────────────────────────

@@ -1,18 +1,23 @@
 package com.thriftybackpacker.controller;
 
-import com.thriftybackpacker.service.RapidApiClient;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.bind.annotation.*;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.thriftybackpacker.service.RapidApiClient;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Passes real RapidAPI flight search results to the caller, capped at max-flights.
@@ -22,8 +27,8 @@ import java.util.Map;
  * RapidAPI so that the budget filter compares like-for-like. The frontend does not display
  * a currency label, so the change from AED → USD is reflected in lower numeric values.
  *
- * Budget filter: maxFlightUsd = budget-cap × budget-flight-ratio (default $2,400 for a
- * $6,000 cap at 40%). Offers with no parseable price are excluded. If all offers have
+ * Budget filter: maxFlightUsd = budget-cap × budget-flight-ratio (default $900 for a
+ * $1,500 cap at 60%). Offers with no parseable price are excluded. If all offers have
  * unparseable prices the filter is bypassed and all offers are returned unfiltered.
  */
 @Slf4j
@@ -35,13 +40,13 @@ public class FlightController {
 
     private final RapidApiClient rapidApiClient;
 
-    @Value("${travel.api.max-flights:20}")
+    @Value("${travel.api.max-flights:40}")
     private int maxFlights;
 
-    @Value("${travel.api.budget-cap:6000.00}")
+    @Value("${travel.api.budget-cap:1500.00}")
     private BigDecimal budgetCap;
 
-    @Value("${travel.api.budget-flight-ratio:0.40}")
+    @Value("${travel.api.budget-flight-ratio:0.60}")
     private double flightRatio;
 
     @Operation(
@@ -66,7 +71,8 @@ public class FlightController {
             @RequestParam(required = false)          String return_date,
             @RequestParam(required = false)          String children_ages) {
 
-        double maxFlightUsd = budgetCap.doubleValue() * flightRatio;
+        // Calculating per leg budget cap = 1500 × 0.60 / 2 = $450 for a round trip, or the full $900 for a one-way.
+        double maxFlightUsd = budgetCap.doubleValue() * flightRatio / 2.0;
 
         log.info("Flight search — from={} to={} date={} | frontend_currency={} effective_currency=USD | budget_cap={} max_flight_price={}",
                 from_code, to_code, depart_date, currency, budgetCap, String.format("%.2f", maxFlightUsd));
@@ -136,7 +142,8 @@ public class FlightController {
                     budgetOffers.size(), overBudget, unknownCount);
 
             if (budgetOffers.isEmpty()) {
-                log.info("Flight budget filter: no flights found at or below {}USD — returning empty list", String.format("%.2f", maxFlightPrice));
+                log.info("Flight budget filter: no flights found at or below {}USD — returning empty list",
+                        String.format("%.2f", maxFlightPrice));
             }
 
             // Apply count cap after price filter
