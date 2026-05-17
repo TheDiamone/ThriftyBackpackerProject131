@@ -39,11 +39,11 @@ public class UserService {
      * endpoint stays idempotent (calling it twice doesn't throw).
      */
     @Transactional
-    public User createUser(String firstName, String lastName, String email, String phoneNumber) {
+    public User createUser(String firstName, String lastName, String email, String phoneNumber, String password) {
         if (userRepository.existsByEmail(email)) {
             return userRepository.findByEmail(email).orElseThrow();
         }
-        return buildAndSave(firstName, lastName, email, phoneNumber);
+        return buildAndSave(firstName, lastName, email, phoneNumber, password);
     }
 
     /**
@@ -51,19 +51,20 @@ public class UserService {
      * Throws DuplicateEmailException (→ 409) when the email is already in use.
      */
     @Transactional
-    public User registerUser(String firstName, String lastName, String email, String phoneNumber) {
+    public User registerUser(String firstName, String lastName, String email, String phoneNumber, String password) {
         if (userRepository.existsByEmail(email)) {
             throw new DuplicateEmailException(email);
         }
-        return buildAndSave(firstName, lastName, email, phoneNumber);
+        return buildAndSave(firstName, lastName, email, phoneNumber, password);
     }
 
-    private User buildAndSave(String firstName, String lastName, String email, String phoneNumber) {
+    private User buildAndSave(String firstName, String lastName, String email, String phoneNumber, String password) {
         User user = new User();
         user.setFirstName(firstName);
         user.setLastName(lastName);
         user.setEmail(email);
         user.setPhoneNumber(phoneNumber);
+        user.setPassword(password);
         return userRepository.save(user);
     }
 

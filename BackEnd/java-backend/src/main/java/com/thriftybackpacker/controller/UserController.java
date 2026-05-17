@@ -48,11 +48,14 @@ public class UserController {
             @RequestParam String email,
             @RequestParam(required = false) String password) {
         User user = userService.findByEmail(email);
+        if (password == null || !password.equals(user.getPassword())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("detail", "Invalid email or password."));
+        }
         return ResponseEntity.ok(Map.of(
                 "userId", user.getUserId(),
                 "User_ID", user.getUserId(),
-                "message", "Login successful"
-        ));
+                "message", "Login successful"));
     }
 
     /**
@@ -83,7 +86,8 @@ public class UserController {
             return ResponseEntity.badRequest().body(Map.of("detail", "email is not a valid address."));
         }
 
-        User user = userService.registerUser(firstName, lastName, email, phone);
+        String password = body.getOrDefault("Password", body.getOrDefault("password", "")).trim();
+        User user = userService.registerUser(firstName, lastName, email, phone, password);  
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                 "userId", user.getUserId(),
                 "User_ID", user.getUserId(),
