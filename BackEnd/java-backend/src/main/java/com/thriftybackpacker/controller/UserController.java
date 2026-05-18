@@ -47,7 +47,11 @@ public class UserController {
     public ResponseEntity<Map<String, Object>> login(
             @RequestParam String email,
             @RequestParam(required = false) String password) {
-        User user = userService.findByEmail(email);
+           if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("detail", "Email is required."));
+        }
+     User user = userService.findByEmail(email);
         if (password == null || !password.equals(user.getPassword())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("detail", "Invalid email or password."));

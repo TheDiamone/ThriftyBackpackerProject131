@@ -156,6 +156,7 @@ public class BookingService {
                         "Hotel reservation " + reservationNo + " not found for booking " + bookingId));
 
         if (update.getHotelCode() != null) hr.setHotelCode(update.getHotelCode());
+        if (update.getHotelName() != null) hr.setHotelName(update.getHotelName());
         if (update.getCheckInDate() != null) hr.setCheckInDate(update.getCheckInDate());
         if (update.getCheckInTime() != null) hr.setCheckInTime(update.getCheckInTime());
         if (update.getCheckOutDate() != null) hr.setCheckOutDate(update.getCheckOutDate());
