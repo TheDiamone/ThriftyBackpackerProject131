@@ -137,7 +137,7 @@ public class BookingController {
     @Operation(hidden = true)
     @GetMapping("/setup-seed-data/")
     public Map<String, String> seedData() {
-        var user = userService.createUser("Test", "Subject", "test@example.com", "555-0100", "password123");
+        var user = userService.createUser("Test", "Subject", "test@example.com", "555-0100", "1234567");
         return Map.of("message", "Seed user ready (ID: " + user.getUserId() + "). Use this User_Id to create bookings.");
     }
 }
